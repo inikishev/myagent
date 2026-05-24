@@ -1,0 +1,23 @@
+[project]
+name = "myagent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "function-schema>=0.4.5",
+    "jsonschema>=4.26.0",
+    "langchain-core>=1.4.0",
+    "loguru>=0.7.3",
+    "openai>=2.36.0",
+    "pathvalidate>=3.3.1",
+    "whatthepatch>=1.0.7",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+    "sympy>=1.14.0",
+]
+[tool.setuptools.packages]
+find = {}  # Scanning implicit namespaces is active by default
