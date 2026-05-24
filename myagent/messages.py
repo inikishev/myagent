@@ -240,9 +240,6 @@ class ToolCall(dict[str, Any]):
         kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items())
         return f"{self.__class__.__name__}({kwargs_str})"
 
-    def to_dict(self) -> dict:
-        return dict(self)
-
 FinishReason = Literal["stop", "length", "tool_calls", "content_filter", "function_call"]
 
 
