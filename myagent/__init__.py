@@ -4,6 +4,15 @@ Provides message types, tool definitions, an OpenAI-compatible wrapper,
 and a ReAct agent loop that alternates between reasoning and tool execution.
 """
 
+from langchain_core.tools import BaseTool, tool
+
+from .agent import (
+    AnyLanguageModel,
+    BaseLanguageModel,
+    OpenAIWrapper,
+    agent_step,
+    run_agent,
+)
 from .callbacks import Callback, StreamingPrintCallback
 from .messages import (
     AnyMessage,
@@ -13,5 +22,3 @@ from .messages import (
     ToolMessage,
     UserMessage,
 )
-from .agent import AnyLanguageModel, BaseLanguageModel, OpenAIWrapper, agent_step, run_agent
-from .tools import Tool, tool

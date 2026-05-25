@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
-from loguru import logger
+
 import openai
 import openai.types.chat
+from langchain_core.tools import BaseTool
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from loguru import logger
 
 from .callbacks import Callback
 from .messages import (
@@ -16,7 +19,6 @@ from .messages import (
     UserMessage,
     to_message,
 )
-from .tools import Tool
 
 
 class BaseLanguageModel(ABC):
@@ -30,7 +32,7 @@ class BaseLanguageModel(ABC):
     def invoke(
         self,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: list[Callback],
         **generation_kwargs: Any,
     ) -> AssistantMessage:
@@ -51,7 +53,7 @@ class BaseLanguageModel(ABC):
     def invoke_streaming(
         self,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: list[Callback],
         **generation_kwargs: Any,
     ) -> AssistantMessage:
@@ -127,7 +129,7 @@ class OpenAIWrapper(BaseLanguageModel):
     def invoke(
         self,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: list[Callback],
         model: str | None = None,
         **generation_kwargs: Any,
@@ -139,7 +141,7 @@ class OpenAIWrapper(BaseLanguageModel):
         # Generate a response
         response: openai.types.chat.ChatCompletion = self.client.chat.completions.create(
             messages=cast(Any, messages),
-            tools=[cast(Any, t.json_schema) for t in tools],
+            tools=[cast(Any, convert_to_openai_tool(t)) for t in tools],
             **generation_kwargs,
         )
 
@@ -171,14 +173,16 @@ class OpenAIWrapper(BaseLanguageModel):
     def invoke_streaming(
         self,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: list[Callback],
         **generation_kwargs: Any,
     ) -> AssistantMessage:
 
+        generation_kwargs.update(self.generation_kwargs)
+
         stream = self.client.chat.completions.create(
             messages=cast(Any, messages),
-            tools=[cast(Any, t.json_schema) for t in tools],
+            tools=[cast(Any, convert_to_openai_tool(t)) for t in tools],
             stream=True,
             **generation_kwargs,
         )
@@ -273,7 +277,7 @@ def _ensure_list[T](x: T | Sequence[T] | None) -> list[T]:
 def agent_step(
     lm: AnyLanguageModel,
     messages: AnyMessage | Sequence[AnyMessage],
-    tools: Tool | Sequence[Tool] | None = None,
+    tools: BaseTool | Sequence[BaseTool] | None = None,
     streaming: bool = False,
     callbacks: Callback | Sequence[Callback] | None = None,
     **generation_kwargs: Any,
@@ -333,7 +337,7 @@ def _is_empty_stop_message(response: AssistantMessage) -> bool:
 def run_agent(
     lm: AnyLanguageModel,
     messages: AnyMessage | Sequence[AnyMessage],
-    tools: Tool | Sequence[Tool] | None = None,
+    tools: BaseTool | Sequence[BaseTool] | None = None,
     empty_stop_message_retries: int = 10,
     streaming: bool = False,
     callbacks: Callback | Sequence[Callback] | None = None,

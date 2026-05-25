@@ -4,11 +4,10 @@ Anything that `chat.completions` doesn't use is stored under `extra_metadata` ke
 
 import json
 from collections.abc import Sequence
-from typing import Any, Literal, TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import pydantic
-
-from .tools import Tool
+from langchain_core.tools import BaseTool
 
 if TYPE_CHECKING:
     from .callbacks import Callback
@@ -213,7 +212,7 @@ class ToolCall(dict[str, Any]):
         """
         return json.loads(self.arguments)
 
-    def invoke_tool(self, tool: Tool, catch_exceptions: bool = True) -> "ToolMessage":
+    def invoke_tool(self, tool: BaseTool, catch_exceptions: bool = True) -> "ToolMessage":
         """Execute the tool with parsed arguments and return a ToolMessage with the result.
 
         Args:
@@ -224,8 +223,7 @@ class ToolCall(dict[str, Any]):
             ToolMessage containing the tool execution result or error message.
         """
         try:
-            arguments = self.parse_arguments()
-            result = tool.call_with_arguments(arguments)
+            result = tool.invoke(self.parse_arguments())
             content = str(result)
 
         except pydantic.ValidationError as e:
@@ -311,7 +309,7 @@ class AssistantMessage(BaseMessage):
         self["tool_calls"] = value
 
     def invoke_tools(
-        self, tools: Tool | Sequence[Tool] | None, catch_exceptions: bool = False, callbacks: "list[Callback] | None" = None,
+        self, tools: BaseTool | Sequence[BaseTool] | None, catch_exceptions: bool = False, callbacks: "list[Callback] | None" = None,
     ) -> list[ToolMessage]:
         """Execute all tools requested by the model and return ToolMessages.
 
@@ -331,7 +329,7 @@ class AssistantMessage(BaseMessage):
             return []
 
         assert tools is not None
-        if isinstance(tools, Tool):
+        if isinstance(tools, BaseTool):
             tools = [tools]
 
         tools_dict = {tool.name: tool for tool in tools}

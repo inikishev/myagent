@@ -3,7 +3,7 @@ from abc import ABC
 from typing import TYPE_CHECKING
 
 from .messages import BaseMessage, ToolCall, ToolMessage, AssistantMessage
-from .tools import Tool
+from langchain_core.tools import BaseTool
 
 if TYPE_CHECKING:
     from .agent import BaseLanguageModel
@@ -37,16 +37,16 @@ class Callback(ABC):
     def on_response_received(self, response: AssistantMessage) -> None:
         """Called when a response is received from the agent."""
 
-    def on_agent_start(self, messages: list[BaseMessage], tools: list[Tool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_agent_start(self, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called when the agent loop begins."""
 
-    def on_agent_end(self, messages: list[BaseMessage], tools: list[Tool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_agent_end(self, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called when the agent loop completes."""
 
-    def on_step_start(self, step: int, messages: list[BaseMessage], tools: list[Tool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_step_start(self, step: int, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called at the start of each agent step."""
 
-    def on_step_end(self, step: int, messages: list[BaseMessage], tools: list[Tool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_step_end(self, step: int, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called at the end of each agent step."""
 
 
@@ -76,7 +76,7 @@ class StreamingPrintCallback(Callback):
     def on_agent_start(
         self,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: "list[Callback]",
         lm: "BaseLanguageModel",
         streaming: bool,
@@ -88,7 +88,7 @@ class StreamingPrintCallback(Callback):
         self,
         step: int,
         messages: list[BaseMessage],
-        tools: list[Tool],
+        tools: list[BaseTool],
         callbacks: "list[Callback]",
         lm: "BaseLanguageModel",
         streaming: bool,
