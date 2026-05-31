@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import pydantic
 from langchain_core.tools import BaseTool
-
-if TYPE_CHECKING:
-    from .callbacks import Callback
+from .callbacks import Callback
 
 class BaseMessage(dict[str, Any]):
     """Base class for all message types in agent conversations.
@@ -309,7 +307,7 @@ class AssistantMessage(BaseMessage):
         self["tool_calls"] = value
 
     def invoke_tools(
-        self, tools: BaseTool | Sequence[BaseTool] | None, catch_exceptions: bool = False, callbacks: "list[Callback] | None" = None,
+        self, tools: BaseTool | Sequence[BaseTool] | None, catch_exceptions: bool = False, callbacks: "Callback | Sequence[Callback] | None" = None,
     ) -> list[ToolMessage]:
         """Execute all tools requested by the model and return ToolMessages.
 
@@ -327,6 +325,9 @@ class AssistantMessage(BaseMessage):
         """
         if len(self.tool_calls) == 0:
             return []
+
+        if isinstance(callbacks, Callback):
+            callbacks = [callbacks]
 
         assert tools is not None
         if isinstance(tools, BaseTool):

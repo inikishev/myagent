@@ -4,7 +4,7 @@ Provides message types, tool definitions, an OpenAI-compatible wrapper,
 and a ReAct agent loop that alternates between reasoning and tool execution.
 """
 
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import tool
 
 from .agent import (
     AnyLanguageModel,

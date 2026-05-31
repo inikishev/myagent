@@ -2,12 +2,11 @@ import sys
 from abc import ABC
 from typing import TYPE_CHECKING
 
-from .messages import BaseMessage, ToolCall, ToolMessage, AssistantMessage
 from langchain_core.tools import BaseTool
 
 if TYPE_CHECKING:
     from .agent import BaseLanguageModel
-
+    from .messages import BaseMessage, ToolCall, ToolMessage, AssistantMessage
 
 class Callback(ABC):
     """Base class for agent callbacks.
@@ -15,7 +14,6 @@ class Callback(ABC):
     Subclass and override methods to handle specific agent events.
     All methods are no-op by default.
     """
-
     def on_content_token(self, token: str, lm: "BaseLanguageModel") -> None:
         """Called for each content token during streaming."""
 
@@ -28,25 +26,25 @@ class Callback(ABC):
     def on_tool_call_token(self, token: str, lm: "BaseLanguageModel") -> None:
         """Called for each tool call argument token during streaming."""
 
-    def on_tool_call(self, tool_call: ToolCall, lm: "BaseLanguageModel") -> None:
+    def on_tool_call(self, tool_call: "ToolCall", lm: "BaseLanguageModel") -> None:
         """Called when a tool call is fully assembled."""
 
-    def on_tool_return(self, tool_message: ToolMessage) -> None:
+    def on_tool_return(self, tool_message: "ToolMessage") -> None:
         """Called when a tool execution returns a result and a ToolMessage is created."""
 
-    def on_response_received(self, response: AssistantMessage) -> None:
+    def on_response_received(self, response: "AssistantMessage") -> None:
         """Called when a response is received from the agent."""
 
-    def on_agent_start(self, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_agent_start(self, messages: "list[BaseMessage]", tools: "list[BaseTool]", callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called when the agent loop begins."""
 
-    def on_agent_end(self, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_agent_end(self, messages: "list[BaseMessage]", tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called when the agent loop completes."""
 
-    def on_step_start(self, step: int, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_step_start(self, step: int, messages: "list[BaseMessage]", tools: "list[BaseTool]", callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called at the start of each agent step."""
 
-    def on_step_end(self, step: int, messages: list[BaseMessage], tools: list[BaseTool], callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
+    def on_step_end(self, step: int, messages: "list[BaseMessage]", tools: "list[BaseTool]", callbacks: "list[Callback]", lm: "BaseLanguageModel", streaming: bool) -> None:
         """Called at the end of each agent step."""
 
 
@@ -62,67 +60,53 @@ class StreamingPrintCallback(Callback):
     Pass ``color=False`` to disable ANSI codes (e.g. when logging to a file).
     """
 
-    def __init__(self, color: bool = True) -> None:
+    def __init__(self, max_chars: int = 200, color: bool = True) -> None:
         self._streaming = False
         self._color = color
         self._seen_reasoning = False
         self._step = 0
+        self._max_chars = max_chars
 
     def _style(self, code: str, text: str) -> str:
         if not self._color or not sys.stdout.isatty():
             return text
         return f"\033[{code}m{text}\033[0m"
 
-    def on_agent_start(
-        self,
-        messages: list[BaseMessage],
-        tools: list[BaseTool],
-        callbacks: "list[Callback]",
-        lm: "BaseLanguageModel",
-        streaming: bool,
-    ) -> None:
+    def on_agent_start(self, messages, tools, callbacks, lm, streaming) -> None:
         self._streaming = streaming
         self._step = 0
 
-    def on_step_start(
-        self,
-        step: int,
-        messages: list[BaseMessage],
-        tools: list[BaseTool],
-        callbacks: "list[Callback]",
-        lm: "BaseLanguageModel",
-        streaming: bool,
-    ) -> None:
+    def on_step_start(self, step: int, messages, tools, callbacks, lm, streaming) -> None:
         self._step = step
         self._seen_reasoning = False
         print(f"\n{self._style('1;33', f'── Step {step} ──')}")
 
-    def on_reasoning_token(self, token: str, lm: "BaseLanguageModel") -> None:
+    def on_reasoning_token(self, token, lm) -> None:
         if not self._seen_reasoning:
             print(f"\n{self._style('3;90', 'Thinking...')}", end='', flush=True)
             self._seen_reasoning = True
         print(self._style('3;90', token), end='', flush=True)
 
-    def on_content_token(self, token: str, lm: "BaseLanguageModel") -> None:
+    def on_content_token(self, token, lm) -> None:
         print(token, end='', flush=True)
 
-    def on_tool_call_start(self, name: str, lm: "BaseLanguageModel") -> None:
+    def on_tool_call_start(self, name, lm) -> None:
         print(f"\n\n{self._style('1;36', f'  ⚡ {name}(')}", end='', flush=True)
 
-    def on_tool_call_token(self, token: str, lm: "BaseLanguageModel") -> None:
+    def on_tool_call_token(self, token, lm) -> None:
         print(self._style('93', token), end='', flush=True)
 
-    def on_tool_call(self, tool_call: ToolCall, lm: "BaseLanguageModel") -> None:
+    def on_tool_call(self, tool_call, lm) -> None:
         if self._streaming:
             print(self._style('1;36', ')'), flush=True)
 
-    def on_tool_return(self, tool_message: ToolMessage) -> None:
+    def on_tool_return(self, tool_message) -> None:
         content = tool_message.content or ""
-        if len(content) > 200:
-            content = content[:200] + "..."
+        if len(content) > self._max_chars:
+            content = content[:self._max_chars] + "..."
         print(f"{self._style('90', f'  → {content}')}")
 
-    def on_response_received(self, response: AssistantMessage) -> None:
+    def on_response_received(self, response) -> None:
         if not self._streaming:
             if response.reasoning:
                 print(f"\n{self._style('3;90', response.reasoning)}")

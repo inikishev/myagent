@@ -268,7 +268,7 @@ def get_lm(lm: AnyLanguageModel) -> BaseLanguageModel:
     raise NotImplementedError(type(lm))
 
 
-def _ensure_list[T](x: T | Sequence[T] | None) -> list[T]:
+def ensure_list[T](x: T | Sequence[T] | None) -> list[T]:
     if x is None: return []
     if isinstance(x, Sequence): return list(x)
     return [x]
@@ -297,9 +297,9 @@ def agent_step(
     """
     lm = get_lm(lm)
 
-    messages = [to_message(m) for m in _ensure_list(messages)]
-    callbacks = _ensure_list(callbacks)
-    tools = _ensure_list(tools)
+    messages = [to_message(m) for m in ensure_list(messages)]
+    callbacks = ensure_list(callbacks)
+    tools = ensure_list(tools)
 
     if streaming:
         return lm.invoke_streaming(
@@ -361,9 +361,9 @@ def run_agent(
         Complete conversation history including all messages and tool results.
     """
     lm = get_lm(lm)
-    messages = [to_message(m) for m in _ensure_list(messages)]
-    callbacks = _ensure_list(callbacks)
-    tools = _ensure_list(tools)
+    messages = [to_message(m) for m in ensure_list(messages)]
+    callbacks = ensure_list(callbacks)
+    tools = ensure_list(tools)
 
     for cb in callbacks:
         cb.on_agent_start(messages=messages, tools=tools, callbacks=callbacks, lm=lm, streaming=streaming)
