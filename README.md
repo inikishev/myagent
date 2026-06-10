@@ -1,8 +1,3 @@
-# update20260610
-Im going to make a new one for openai responses API and it will be in a new repo and this one is done for
-
-<h1 align='center'>myagent</h1>
-
 Very simple abstraction for OpenAI chat completions API (technically can be used for other ones like `transformers` but ive not implemented it yet).
 
 I became lazy after writing the sentence above. So no more readme for now.
