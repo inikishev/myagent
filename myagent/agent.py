@@ -418,16 +418,3 @@ def run_agent(
         cb.on_agent_end(messages=messages, tools=tools, callbacks=callbacks, lm=lm, streaming=streaming)
 
     return messages
-
-def inject_tool_call(assistant_message: AssistantMessage, tool: str | BaseTool, content: str | Any, arguments: str | Any = "{}"):
-    """Modifies `assistant_message` in place, adding a new tool call and setting finish_reason to 'tool_calls', and returns a `ToolMessage`."""
-    tool_call_id = f"call_{secrets.token_hex(12)}"
-
-    if isinstance(tool, BaseTool): tool = tool.name
-    if not isinstance(arguments, str): arguments = json.dumps(arguments, ensure_ascii=False, sort_keys=False)
-
-    tool_call = ToolCall(id=tool_call_id, name=tool, arguments=arguments)
-    assistant_message.tool_calls.append(tool_call)
-    assistant_message.finish_reason = 'tool_calls'
-
-    return ToolMessage(tool_call_id=tool_call_id, content=str(content), tool_call=tool_call)
