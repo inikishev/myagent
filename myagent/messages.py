@@ -76,6 +76,16 @@ class SystemMessage(BaseMessage):
     def from_dict(cls, d: dict):
         return cls(d["content"])
 
+class DeveloperMessage(BaseMessage):
+    """Developer message, only for responses API, and I don't know if non openai models are trained for this."""
+
+    def __init__(self, content: str | None):
+        super().__init__("developer", content)
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        return cls(d["content"])
+
 class UserMessage(BaseMessage):
     """A message from the user, representing input or queries to the agent."""
 
@@ -210,7 +220,7 @@ class ToolCall(dict[str, Any]):
         """
         return json.loads(self.arguments)
 
-    def invoke_tool(self, tool: BaseTool, catch_exceptions: bool = True) -> "ToolMessage":
+    def invoke_tool(self, tool: BaseTool, catch_exceptions: bool = False) -> "ToolMessage":
         """Execute the tool with parsed arguments and return a ToolMessage with the result.
 
         Args:
@@ -307,7 +317,7 @@ class AssistantMessage(BaseMessage):
         self["tool_calls"] = value
 
     def invoke_tools(
-        self, tools: BaseTool | Sequence[BaseTool] | None, catch_exceptions: bool = False, callbacks: "Callback | Sequence[Callback] | None" = None,
+        self, tools: BaseTool | Sequence[BaseTool] | None, catch_exceptions: bool = False, callbacks: "Callback | Sequence[Callback] | None" = None, missing_strategy: Literal["skip", "message", "raise"] = "message",
     ) -> list[ToolMessage]:
         """Execute all tools requested by the model and return ToolMessages.
 
@@ -337,11 +347,34 @@ class AssistantMessage(BaseMessage):
 
         tool_messages = []
         for tool_call in self.tool_calls:
-            tool_message = tool_call.invoke_tool(tools_dict[tool_call.name], catch_exceptions=catch_exceptions)
-            tool_messages.append(tool_message)
-            if callbacks is not None:
-                for cb in callbacks:
-                    cb.on_tool_return(tool_message)
+
+            if tool_call.name in tools_dict:
+                tool_message = tool_call.invoke_tool(tools_dict[tool_call.name], catch_exceptions=catch_exceptions)
+
+            else:
+                # Tool doesn't exist
+                if missing_strategy == 'skip':
+                    tool_message = None
+
+                elif missing_strategy == 'message':
+
+                    tool_message = ToolMessage(
+                        tool_call_id=tool_call.id,
+                        content=f"ERROR: tool '{tool_call.name}' doesn't exist.",
+                        tool_call=tool_call,
+                    )
+
+                elif missing_strategy == 'raise':
+                    raise RuntimeError(f"Tool {tool_call.name} doesn't exist.")
+
+                else:
+                    raise ValueError(missing_strategy)
+
+            if tool_message is not None:
+                tool_messages.append(tool_message)
+                if callbacks is not None:
+                    for cb in callbacks:
+                        cb.on_tool_return(tool_message)
 
         return tool_messages
 

@@ -1,3 +1,5 @@
+import json
+import secrets
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
@@ -163,12 +165,14 @@ class OpenAIWrapper(BaseLanguageModel):
                 for cb in callbacks:
                     cb.on_tool_call(tool_call=tc, lm=self)
 
-        return AssistantMessage(
+        msg = AssistantMessage(
             content=openai_assistant_msg.content,
             tool_calls=tool_calls,
             finish_reason=response.choices[0].finish_reason,
             reasoning=getattr(response.choices[0].message, "reasoning_content", None),
         )
+        msg.extra_metadata["raw"] = response
+        return msg
 
     def invoke_streaming(
         self,
@@ -240,12 +244,14 @@ class OpenAIWrapper(BaseLanguageModel):
             for cb in callbacks:
                 cb.on_tool_call(tool_call=tc, lm=self)
 
-        return AssistantMessage(
+        msg = AssistantMessage(
             content="".join(content_parts) if content_parts else None,
             tool_calls=tool_calls,
             finish_reason=finish_reason or "stop",
             reasoning="".join(reasoning_parts) if reasoning_parts else None,
         )
+        return msg
+
 
 
 AnyLanguageModel = BaseLanguageModel | openai.OpenAI
@@ -338,9 +344,10 @@ def run_agent(
     lm: AnyLanguageModel,
     messages: AnyMessage | Sequence[AnyMessage],
     tools: BaseTool | Sequence[BaseTool] | None = None,
-    empty_stop_message_retries: int = 10,
     streaming: bool = False,
     callbacks: Callback | Sequence[Callback] | None = None,
+    empty_stop_message_retries: int = 10,
+    catch_tool_exceptions: bool = False,
     **generation_kwargs: Any,
 ) -> list[BaseMessage]:
     """Run the full agent loop until the model stops.
@@ -395,7 +402,7 @@ def run_agent(
             cb.on_response_received(response)
 
         # Invoke tools
-        tool_messages = response.invoke_tools(tools=tools, callbacks=callbacks)
+        tool_messages = response.invoke_tools(tools=tools, callbacks=callbacks, catch_exceptions=catch_tool_exceptions)
         messages.append(response)
         messages.extend(tool_messages)
 
@@ -412,3 +419,15 @@ def run_agent(
 
     return messages
 
+def inject_tool_call(assistant_message: AssistantMessage, tool: str | BaseTool, content: str | Any, arguments: str | Any = "{}"):
+    """Modifies `assistant_message` in place, adding a new tool call and setting finish_reason to 'tool_calls', and returns a `ToolMessage`."""
+    tool_call_id = f"call_{secrets.token_hex(12)}"
+
+    if isinstance(tool, BaseTool): tool = tool.name
+    if not isinstance(arguments, str): arguments = json.dumps(arguments, ensure_ascii=False, sort_keys=False)
+
+    tool_call = ToolCall(id=tool_call_id, name=tool, arguments=arguments)
+    assistant_message.tool_calls.append(tool_call)
+    assistant_message.finish_reason = 'tool_calls'
+
+    return ToolMessage(tool_call_id=tool_call_id, content=str(content), tool_call=tool_call)
