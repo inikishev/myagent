@@ -1,14 +1,18 @@
 """Message types. They are is JSON-serializeable and OpenAI-compliant and
 can be for example passed directly to `ChatOpenAI.client.chat.completions`.
 Anything that `chat.completions` doesn't use is stored under `extra_metadata` key."""
-
+import os
+from pathlib import Path
+import base64
 import json
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import pydantic
 from langchain_core.tools import BaseTool
+
 from .callbacks import Callback
+
 
 class BaseMessage(dict[str, Any]):
     """Base class for all message types in agent conversations.
@@ -58,7 +62,7 @@ class BaseMessage(dict[str, Any]):
         self["extra_metadata"] = value
 
     def __repr__(self) -> str:
-        kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items())
+        kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items() if k != "extra_metadata")
         return f"{self.__class__.__name__}({kwargs_str})"
 
 class SystemMessage(BaseMessage):
@@ -86,21 +90,115 @@ class DeveloperMessage(BaseMessage):
     def from_dict(cls, d: dict):
         return cls(d["content"])
 
+
+class BaseContent(dict[str, Any]):
+    def __init__(self, type: str):
+        super().__init__(type=type)
+    
+    @property
+    def type(self) -> str:
+        return self["type"]
+
+    @type.setter
+    def type(self, value: str) -> None:
+        self["type"] = value
+
+    def __repr__(self) -> str:
+        kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items())
+        return f"{self.__class__.__name__}({kwargs_str})"
+
+class Text(BaseContent):
+    def __init__(self, text: str):
+        super().__init__(type="text")
+        self.text = text
+
+    @property
+    def text(self) -> str:
+        return self["text"]
+
+    @text.setter
+    def text(self, value: str) -> None:
+        self["text"] = value
+
+
+Detail = Literal["low", "medium", "high"]
+
+class Image(BaseContent):
+    def __init__(self, url: str, detail: Detail = "high"):
+        super().__init__(type="image_url")
+        self["image_url"] = {"url": url, "detail": detail}
+
+    @classmethod
+    def from_local_file(cls, path: str | os.PathLike, detail: Detail = "high"):
+        with open(path, "rb") as image_file:
+            encoded_bytes = base64.b64encode(image_file.read())
+            b64 = encoded_bytes.decode("utf-8")
+        
+        mime = Path(path).suffix.lower()
+        if mime == "jpg": mime = "jpeg"
+        
+        return Image(url=f"data:image/{mime};base64,{b64}", detail=detail)
+
+    @property
+    def image_url(self) -> dict[str, str]:
+        return self["image_url"]
+
+    @image_url.setter
+    def image_url(self, value: dict[str, str]) -> None:
+        self["image_url"] = value
+
+    @property
+    def url(self) -> str:
+        return self.image_url["url"]
+
+    @url.setter
+    def url(self, value: str) -> None:
+        self.image_url["url"] = value
+
+    @property
+    def detail(self) -> Detail:
+        """The role of the message sender."""
+        return cast(Detail, self.image_url["detail"])
+
+    @detail.setter
+    def detail(self, value: Detail) -> None:
+        self.image_url["detail"] = value
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(detail={self.detail})"
+
+
 class UserMessage(BaseMessage):
     """A message from the user, representing input or queries to the agent."""
 
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | dict | BaseContent | Sequence[dict | BaseContent] | None):
         """Initialize a user message.
 
         Args:
             content: The user's input or query content.
         """
-        super().__init__("user", content)
+        if isinstance(content, (dict, BaseContent)): content = [content]
+        # images were a post hoc addition
+        # for simplicity we will keep content typed as string
+        super().__init__("user", cast(Any, content))
 
     @classmethod
     def from_dict(cls, d: dict):
-        return cls(d["content"])
+        if isinstance(d["content"], str):
+            return cls(d["content"])
 
+        contents = []
+        for item in d["content"]:
+            if item["type"] == "text":
+                contents.append(Text(item["text"]))
+            elif item["type"] == "image_url":
+                contents.append(Image(url=item["image_url"]["url"], detail=item["image_url"].get("detail", "high")))
+            else:
+                raise NotImplementedError(item["type"])
+            
+        return cls(contents)
+
+    
 class ToolMessage(BaseMessage):
     """A message containing the result of a tool execution.
 
