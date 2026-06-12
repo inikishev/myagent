@@ -143,6 +143,11 @@ class OpenAIWrapper(BaseLanguageModel):
         if model is not None:
             generation_kwargs["model"] = model
 
+        # responses API doesn't have that arg
+        if "presence_penalty" in generation_kwargs:
+            presence_penalty = generation_kwargs.pop("presence_penalty")
+            generation_kwargs.setdefault("extra_body", {}).setdefault("presence_penalty", presence_penalty)
+            
         # Generate a response
         response: openai.types.responses.Response = self.client.responses.create(
             input=cast(Any, input),

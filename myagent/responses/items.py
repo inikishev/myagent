@@ -1,13 +1,17 @@
+import base64
 import json
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, Self, TypedDict, overload
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Self, TypedDict, cast, overload
 
 import pydantic
 from langchain_core.tools import BaseTool
 
 from .callbacks import Callback
-    
+
+
 class BaseItem(dict[str, Any], ABC):
     """In responses API the chat is a list of items such as messages, tool calls, tool call outputs."""
     def __init__(self, *args, **kwargs):
@@ -99,7 +103,73 @@ class OutputTextContent(BaseTextContent):
         return cls(text=d["text"])
 
 # TODO: InputImageContent
+# class ResponseInputImageParam(TypedDict, total=False):
+#     """An image input to the model.
 
+#     Learn about [image inputs](https://platform.openai.com/docs/guides/vision).
+#     """
+
+#     detail: Required[Literal["low", "high", "auto", "original"]]
+#     """The detail level of the image to be sent to the model.
+
+#     One of `high`, `low`, `auto`, or `original`. Defaults to `auto`.
+#     """
+
+#     type: Required[Literal["input_image"]]
+#     """The type of the input item. Always `input_image`."""
+
+#     file_id: Optional[str]
+#     """The ID of the file to be sent to the model."""
+
+#     image_url: Optional[str]
+#     """The URL of the image to be sent to the model.
+
+#     A fully qualified URL or base64 encoded image in a data URL.
+#     """
+
+Detail = Literal["low", "medium", "high"]
+
+class InputImageContent(BaseContent):
+    def __init__(self, image_url: str, detail: Detail = "high"):
+        super().__init__(image_url=image_url, detail=detail, type="input_image")
+
+    @classmethod
+    def from_local_file(cls, path: str | os.PathLike, detail: Detail = "high"):
+        with open(path, "rb") as image_file:
+            encoded_bytes = base64.b64encode(image_file.read())
+            b64 = encoded_bytes.decode("utf-8")
+        
+        mime = Path(path).suffix.lower()
+        if mime == "jpg": mime = "jpeg"
+        
+        return InputImageContent(image_url=f"data:image/{mime};base64,{b64}", detail=detail)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(image_url=d["image_url"], detail=d.get("detail", "high"))
+    
+    @property
+    def image_url(self) -> str:
+        return self["image_url"]
+
+    @image_url.setter
+    def image_url(self, value: str) -> None:
+        self["image_url"] = value
+
+    @property
+    def detail(self) -> Detail:
+        """The role of the message sender."""
+        return cast(Detail, self["detail"])
+
+    @detail.setter
+    def detail(self, value: Detail) -> None:
+        self["detail"] = value
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(detail={self.detail})"
+
+Text = InputTextContent
+Image = InputImageContent
 
 AnyContent = BaseContent | dict[str, Any]
 
@@ -276,20 +346,23 @@ class ToolCallItem(BaseToolCallItem):
     def invoke_tool(self, tool: BaseTool, catch_exceptions: bool = False) -> "ToolOutputItem":
         try:
             result = tool.invoke(self.parse_arguments())
-            output = str(result)
+            # Output can be str or list of Content objects.
+            if isinstance(result, BaseContent): output = [result]
+            elif isinstance(result, Sequence) and len(result) > 0 and isinstance(result[0], BaseContent): output = list(result)
+            else: output = str(result)
 
         except pydantic.ValidationError as e:
             output = f"ERROR: arguments for tool `{self.name}` are incorrect:\n{e}"
 
         except Exception if catch_exceptions else () as e:
             output = f"Exception while calling tool `{self.name}`:\n{e}"
-
+        
         return ToolOutputItem(call_id=self.call_id, id=self.id, output=output, tool_call=self)
 
 
 class ToolOutputItem(BaseToolCallItem):
     """What the tool call returned."""
-    def __init__(self, call_id: str, output: str, id: str | None = None, tool_call: ToolCallItem | None = None):
+    def __init__(self, call_id: str, output: str | Sequence[BaseContent], id: str | None = None, tool_call: ToolCallItem | None = None):
         super().__init__(call_id=call_id, id=id, type="function_call_output")
         self.output = output
         self.extra_metadata["tool_call"] = tool_call
@@ -310,11 +383,11 @@ class ToolOutputItem(BaseToolCallItem):
         )
 
     @property
-    def output(self) -> str:
+    def output(self) -> str | Sequence[BaseContent]:
         return self["output"]
 
     @output.setter
-    def output(self, value: str) -> None:
+    def output(self, value: str | Sequence[BaseContent]) -> None:
         self["output"] = value
     
     @property
@@ -368,7 +441,7 @@ class ReasoningItem(BaseItem):
 class BaseMessage(BaseItem):
     """Message spec from chat completions API which is compatible with responses API, and is easier to write.
     This corresponds to `EasyInputMessageParam`"""
-    def __init__(self, role: Literal["user", "assistant", "system", "developer"], content: str | None, phase: Literal["commentary", "final_answer"] | None = None):
+    def __init__(self, role: Literal["user", "assistant", "system", "developer"], content: str | Sequence[BaseContent] | None, phase: Literal["commentary", "final_answer"] | None = None):
         super().__init__(role=role, content=content, type="message", phase=phase)
 
     @classmethod
@@ -384,11 +457,11 @@ class BaseMessage(BaseItem):
         self["role"] = value
 
     @property
-    def content(self) -> str | None:
+    def content(self) -> str | Sequence[BaseContent] | None:
         return self["content"]
 
     @content.setter
-    def content(self, value: str | None) -> None:
+    def content(self, value: str | Sequence[BaseContent] | None) -> None:
         self["content"] = value
 
     @property
@@ -409,7 +482,7 @@ class BaseMessage(BaseItem):
         self["status"] = value
         
 class SystemMessage(BaseMessage):
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | Sequence[BaseContent] | None):
         super().__init__("system", content)
 
     @classmethod
@@ -417,7 +490,7 @@ class SystemMessage(BaseMessage):
         return cls(d["content"])
 
 class DeveloperMessage(BaseMessage):
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | Sequence[BaseContent] | None):
         super().__init__("developer", content)
 
     @classmethod
@@ -425,7 +498,7 @@ class DeveloperMessage(BaseMessage):
         return cls(d["content"])
 
 class UserMessage(BaseMessage):
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | Sequence[BaseContent] | None):
         super().__init__("user", content)
 
     @classmethod
@@ -434,7 +507,7 @@ class UserMessage(BaseMessage):
 
 class AssistantMessage(BaseMessage):
     """Input assistant message for context injection."""
-    def __init__(self, content: str | None):
+    def __init__(self, content: str | Sequence[BaseContent] | None):
         super().__init__("assistant", content)
 
     @classmethod
@@ -469,6 +542,7 @@ def to_item(item: AnyItem):
     
     if type == "function_call": return ToolCallItem.from_dict(item)
     if type ==  "function_call_output": return ToolOutputItem.from_dict(item)
+    if type == "reasoning": return ReasoningItem.from_dict(item)
     
     raise RuntimeError(f"Unkown type `{type}` on item {item}")
 

@@ -1,94 +1,24 @@
 """Message types. They are is JSON-serializeable and OpenAI-compliant and
 can be for example passed directly to `ChatOpenAI.client.chat.completions`.
 Anything that `chat.completions` doesn't use is stored under `extra_metadata` key."""
-import os
-from pathlib import Path
 import base64
 import json
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+import os
+from collections.abc import Iterable, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, cast, overload
 
+import openai.types.chat
 import pydantic
 from langchain_core.tools import BaseTool
+from openai.types.chat.chat_completion_content_part_image_param import (
+    ChatCompletionContentPartImageParam,
+)
+from openai.types.chat.chat_completion_content_part_text_param import (
+    ChatCompletionContentPartTextParam,
+)
 
 from .callbacks import Callback
-
-
-class BaseMessage(dict[str, Any]):
-    """Base class for all message types in agent conversations.
-
-    Extends dict because UserDict is not JSON-serializeable for some reason.
-    The dict schema follows OpenAI API exactly."""
-
-    def __init__(self, role: str, content: str | None):
-        """Initialize a base message.
-
-        Args:
-            role: The role of the message sender (e.g., 'system', 'user', 'assistant', 'tool').
-            content: The text content of the message, or None if empty.
-        """
-        super().__init__(role=role, content=content, extra_metadata={})
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        """Creates this object from an OpenAI-compliant dictionary."""
-        return cls(d["role"], d["content"])
-
-    @property
-    def role(self) -> str:
-        """The role of the message sender."""
-        return self["role"]
-
-    @role.setter
-    def role(self, value: str) -> None:
-        self["role"] = value
-
-    @property
-    def content(self) -> str | None:
-        """The text content of the message."""
-        return self["content"]
-
-    @content.setter
-    def content(self, value: str | None) -> None:
-        self["content"] = value
-
-    @property
-    def extra_metadata(self) -> dict:
-        """Additional data not used by OpenAI API."""
-        return self["extra_metadata"]
-
-    @extra_metadata.setter
-    def extra_metadata(self, value: dict) -> None:
-        self["extra_metadata"] = value
-
-    def __repr__(self) -> str:
-        kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items() if k != "extra_metadata")
-        return f"{self.__class__.__name__}({kwargs_str})"
-
-class SystemMessage(BaseMessage):
-    """A message from the system, typically containing instructions or context for the agent."""
-
-    def __init__(self, content: str | None):
-        """Initialize a system message.
-
-        Args:
-            content: The system prompt or instruction content.
-        """
-        super().__init__("system", content)
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        return cls(d["content"])
-
-class DeveloperMessage(BaseMessage):
-    """Developer message, only for responses API, and I don't know if non openai models are trained for this."""
-
-    def __init__(self, content: str | None):
-        super().__init__("developer", content)
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        return cls(d["content"])
 
 
 class BaseContent(dict[str, Any]):
@@ -168,19 +98,99 @@ class Image(BaseContent):
         return f"{self.__class__.__name__}(detail={self.detail})"
 
 
+ContentUnion = str | dict | BaseContent | Sequence[dict | BaseContent] | None
+
+class BaseMessage(dict[str, Any]):
+    """Base class for all message types in agent conversations.
+
+    Extends dict because UserDict is not JSON-serializeable for some reason.
+    The dict schema follows OpenAI API exactly."""
+
+    def __init__(self, role: str, content: ContentUnion):
+        """Initialize a base message.
+
+        Args:
+            role: The role of the message sender (e.g., 'system', 'user', 'assistant', 'tool').
+            content: The text content of the message, or None if empty.
+        """
+        if isinstance(content, (dict, BaseContent)): content = [content]
+        super().__init__(role=role, content=content, extra_metadata={})
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        """Creates this object from an OpenAI-compliant dictionary."""
+        return cls(d["role"], d["content"])
+
+    @property
+    def role(self) -> str:
+        """The role of the message sender."""
+        return self["role"]
+
+    @role.setter
+    def role(self, value: str) -> None:
+        self["role"] = value
+
+    @property
+    def content(self) -> str | Sequence[BaseContent] | None:
+        """The text content of the message."""
+        return self["content"]
+
+    @content.setter
+    def content(self, value: str | Sequence[BaseContent] | None) -> None:
+        self["content"] = value
+
+    @property
+    def extra_metadata(self) -> dict:
+        """Additional data not used by OpenAI API."""
+        return self["extra_metadata"]
+
+    @extra_metadata.setter
+    def extra_metadata(self, value: dict) -> None:
+        self["extra_metadata"] = value
+
+    def __repr__(self) -> str:
+        kwargs_str = ", ".join(f"{k}={v}" for k, v in self.items() if k != "extra_metadata")
+        return f"{self.__class__.__name__}({kwargs_str})"
+
+
+class SystemMessage(BaseMessage):
+    """A message from the system, typically containing instructions or context for the agent."""
+
+    def __init__(self, content: str | None):
+        """Initialize a system message.
+
+        Args:
+            content: The system prompt or instruction content.
+        """
+        super().__init__("system", content)
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        return cls(d["content"])
+
+
+class DeveloperMessage(BaseMessage):
+    """Developer message, only for responses API, and I don't know if non openai models are trained for this."""
+
+    def __init__(self, content: str | None):
+        super().__init__("developer", content)
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        return cls(d["content"])
+
+
+
 class UserMessage(BaseMessage):
     """A message from the user, representing input or queries to the agent."""
 
-    def __init__(self, content: str | dict | BaseContent | Sequence[dict | BaseContent] | None):
+    def __init__(self, content: ContentUnion):
         """Initialize a user message.
 
         Args:
             content: The user's input or query content.
         """
-        if isinstance(content, (dict, BaseContent)): content = [content]
-        # images were a post hoc addition
-        # for simplicity we will keep content typed as string
-        super().__init__("user", cast(Any, content))
+        super().__init__("user", content)
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -205,7 +215,7 @@ class ToolMessage(BaseMessage):
     Represents the output returned by a tool after being invoked by the agent.
     """
 
-    def __init__(self, tool_call_id: str, content: str | None = None, tool_call: "ToolCall | None" = None):
+    def __init__(self, tool_call_id: str, content: ContentUnion = None, tool_call: "ToolCall | None" = None):
         """Initialize a tool message.
 
         Args:
@@ -215,7 +225,7 @@ class ToolMessage(BaseMessage):
                 This argument is automatically passed by `agent_step` and `run_agent`, but may be omitted
                 when creating a message manually.
         """
-        super().__init__("tool", content)
+        super().__init__("tool", cast(Any, content))
         self["tool_call_id"] = tool_call_id
         if tool_call is not None:
             self.extra_metadata["tool_call"] = tool_call
@@ -330,7 +340,10 @@ class ToolCall(dict[str, Any]):
         """
         try:
             result = tool.invoke(self.parse_arguments())
-            content = str(result)
+            # content can be str or list of Content objects.
+            if isinstance(result, BaseContent): content = [result]
+            elif isinstance(result, Sequence) and len(result) > 0 and isinstance(result[0], BaseContent): content = list(result)
+            else: content = str(result)
 
         except pydantic.ValidationError as e:
             content = f"ERROR: arguments for tool `{self.name}` are incorrect:\n{e}"
@@ -495,3 +508,18 @@ def to_message(message: AnyMessage):
     if role == "assistant": return AssistantMessage.from_dict(message)
     if role == "tool": return ToolMessage.from_dict(message)
     return BaseMessage.from_dict(message)
+
+
+def patch_enable_visual_tools():
+    """Patches openai library to allow tool calls to return visual content."""
+
+    class PatchedChatCompletionToolMessageParam(TypedDict, total=False):
+        content: Required[str | Iterable[ChatCompletionContentPartTextParam | ChatCompletionContentPartImageParam]]
+        role: Required[Literal["tool"]]
+        tool_call_id: Required[str]
+
+    openai.types.chat.ChatCompletionToolMessageParam = PatchedChatCompletionToolMessageParam
+    openai.types.chat.chat_completion_tool_message_param.ChatCompletionToolMessageParam = PatchedChatCompletionToolMessageParam
+
+    if hasattr(openai.types.chat.chat_completion_tool_message_param.ChatCompletionToolMessageParam, "__pydantic_validator__"):
+        delattr(openai.types.chat.chat_completion_tool_message_param.ChatCompletionToolMessageParam, "__pydantic_validator__")

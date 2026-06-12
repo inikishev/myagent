@@ -14,6 +14,12 @@ dependencies = [
     "whatthepatch>=1.0.7",
 ]
 
+[project.optional-dependencies]
+scenarios = [
+    "numpy>=2.4.6",
+    "wonderwords>=3.0.1",
+]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
