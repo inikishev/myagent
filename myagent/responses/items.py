@@ -22,7 +22,7 @@ class BaseItem(dict[str, Any], ABC):
     @abstractmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
         ...
-        
+
     @property
     def type(self) -> str:
         """Type of this item (message, function_call_output, etc)."""
@@ -48,7 +48,7 @@ class BaseItem(dict[str, Any], ABC):
 
 class BaseContent(dict[str, Any], ABC):
     """content in a message (text, image or audio)"""
-    
+
     @classmethod
     @abstractmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
@@ -62,7 +62,7 @@ class BaseTextContent(BaseContent):
     """read the name of the class"""
     def __init__(self, text: str, type: str):
         super().__init__(text=text, type=type)
-    
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
         return cls(text=d["text"], type=d["type"])
@@ -83,7 +83,7 @@ class BaseTextContent(BaseContent):
     @type.setter
     def type(self, value: str) -> None:
         self["type"] = value
-        
+
 class InputTextContent(BaseTextContent):
     """read the name of the class"""
     def __init__(self, text):
@@ -138,16 +138,16 @@ class InputImageContent(BaseContent):
         with open(path, "rb") as image_file:
             encoded_bytes = base64.b64encode(image_file.read())
             b64 = encoded_bytes.decode("utf-8")
-        
+
         mime = Path(path).suffix.lower()
         if mime == "jpg": mime = "jpeg"
-        
+
         return InputImageContent(image_url=f"data:image/{mime};base64,{b64}", detail=detail)
 
     @classmethod
     def from_dict(cls, d):
         return cls(image_url=d["image_url"], detail=d.get("detail", "high"))
-    
+
     @property
     def image_url(self) -> str:
         return self["image_url"]
@@ -200,7 +200,7 @@ class BaseMessageItem(BaseItem):
     @role.setter
     def role(self, value: Literal["user", "system", "developer", "assistant"]) -> None:
         self["role"] = value
-    
+
     @property
     def content(self) -> list[BaseContent]:
         return self["content"]
@@ -262,15 +262,15 @@ class OutputMessageItem(BaseMessageItem):
         output = self.content[0]
         assert isinstance(output, OutputTextContent)
         return output
-    
+
     @property
     def text(self) -> str:
         return self._get_output().text
-    
+
     @text.setter
     def text(self, value: str) -> None:
         self._get_output().text = value
-    
+
 
 class BaseToolCallItem(BaseItem):
     def __init__(self, call_id: str, id: str | None, type: Literal['function_call', "function_call_output"]):
@@ -288,7 +288,7 @@ class BaseToolCallItem(BaseItem):
     @call_id.setter
     def call_id(self, value: str) -> None:
         self["call_id"] = value
-        
+
     @property
     def id(self) -> str | None:
         return self["id"]
@@ -304,7 +304,7 @@ class BaseToolCallItem(BaseItem):
     @status.setter
     def status(self, value: str) -> None:
         self["status"] = value
-        
+
 class ToolCallItem(BaseToolCallItem):
     """A tool call request made by the model.
 
@@ -318,7 +318,7 @@ class ToolCallItem(BaseToolCallItem):
         super().__init__(call_id=call_id, id=id, type="function_call")
         self.name = name
         self.arguments = arguments
-        
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
         return cls(call_id=d["call_id"], id=d.get("id", None), name=d["name"], arguments=d["arguments"])
@@ -356,7 +356,7 @@ class ToolCallItem(BaseToolCallItem):
 
         except Exception if catch_exceptions else () as e:
             output = f"Exception while calling tool `{self.name}`:\n{e}"
-        
+
         return ToolOutputItem(call_id=self.call_id, id=self.id, output=output, tool_call=self)
 
 
@@ -366,15 +366,15 @@ class ToolOutputItem(BaseToolCallItem):
         super().__init__(call_id=call_id, id=id, type="function_call_output")
         self.output = output
         self.extra_metadata["tool_call"] = tool_call
-        
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
-        
+
         tool_call=d.get("extra_metadata", {}).get("tool_call", None)
-        
+
         if tool_call is not None:
             tool_call = ToolCallItem.from_dict(tool_call)
-            
+
         return cls(
             call_id=d["call_id"],
             id=d.get("id", None),
@@ -389,7 +389,7 @@ class ToolOutputItem(BaseToolCallItem):
     @output.setter
     def output(self, value: str | Sequence[BaseContent]) -> None:
         self["output"] = value
-    
+
     @property
     def tool_call(self) -> ToolCallItem | None:
         return self.extra_metadata["tool_call"]
@@ -425,7 +425,7 @@ class ReasoningItem(BaseItem):
     @summary.setter
     def summary(self, value: list[str]) -> None:
         self["summary"] = [{"text": t, "type": "summary_text"} for t in value]
-    
+
     @property
     def content(self) -> list[str] | None:
         if self["content"] is None: return None
@@ -436,7 +436,7 @@ class ReasoningItem(BaseItem):
         if value is None: self["content"] = value
         else:
             self["content"] = [{"text": t, "type": "reasoning_text"} for t in value]
-    
+
 
 class BaseMessage(BaseItem):
     """Message spec from chat completions API which is compatible with responses API, and is easier to write.
@@ -471,7 +471,7 @@ class BaseMessage(BaseItem):
     @phase.setter
     def phase(self, value: Literal["commentary", "final_answer"] | None) -> None:
         self["phase"] = value
-        
+
     @property
     def status(self) -> str:
         """In openai responses its `Literal["in_progress", "completed", "incomplete"]`, idk what it does"""
@@ -480,7 +480,7 @@ class BaseMessage(BaseItem):
     @status.setter
     def status(self, value: str) -> None:
         self["status"] = value
-        
+
 class SystemMessage(BaseMessage):
     def __init__(self, content: str | Sequence[BaseContent] | None):
         super().__init__("system", content)
@@ -513,8 +513,8 @@ class AssistantMessage(BaseMessage):
     @classmethod
     def from_dict(cls, d: dict):
         return cls(d["content"])
-    
-    
+
+
 
 AnyItem = BaseItem | dict[str, Any]
 
@@ -537,13 +537,13 @@ def to_item(item: AnyItem):
 
         if item["role"] == "assistant":
             return OutputMessageItem.from_dict(item)
-        
+
         return InputMessageItem.from_dict(item)
-    
+
     if type == "function_call": return ToolCallItem.from_dict(item)
     if type ==  "function_call_output": return ToolOutputItem.from_dict(item)
     if type == "reasoning": return ReasoningItem.from_dict(item)
-    
+
     raise RuntimeError(f"Unkown type `{type}` on item {item}")
 
 

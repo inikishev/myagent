@@ -24,7 +24,7 @@ from .callbacks import Callback
 class BaseContent(dict[str, Any]):
     def __init__(self, type: str):
         super().__init__(type=type)
-    
+
     @property
     def type(self) -> str:
         return self["type"]
@@ -63,10 +63,10 @@ class Image(BaseContent):
         with open(path, "rb") as image_file:
             encoded_bytes = base64.b64encode(image_file.read())
             b64 = encoded_bytes.decode("utf-8")
-        
+
         mime = Path(path).suffix.lower()
         if mime == "jpg": mime = "jpeg"
-        
+
         return Image(url=f"data:image/{mime};base64,{b64}", detail=detail)
 
     @property
@@ -131,12 +131,12 @@ class BaseMessage(dict[str, Any]):
         self["role"] = value
 
     @property
-    def content(self) -> str | Sequence[BaseContent] | None:
+    def content(self) -> str | Any:
         """The text content of the message."""
         return self["content"]
 
     @content.setter
-    def content(self, value: str | Sequence[BaseContent] | None) -> None:
+    def content(self, value: str | Any) -> None:
         self["content"] = value
 
     @property
@@ -205,10 +205,10 @@ class UserMessage(BaseMessage):
                 contents.append(Image(url=item["image_url"]["url"], detail=item["image_url"].get("detail", "high")))
             else:
                 raise NotImplementedError(item["type"])
-            
+
         return cls(contents)
 
-    
+
 class ToolMessage(BaseMessage):
     """A message containing the result of a tool execution.
 
@@ -510,7 +510,7 @@ def to_message(message: AnyMessage):
     return BaseMessage.from_dict(message)
 
 
-def patch_enable_visual_tools():
+def patch_openai_to_allow_visual_tools():
     """Patches openai library to allow tool calls to return visual content."""
 
     class PatchedChatCompletionToolMessageParam(TypedDict, total=False):

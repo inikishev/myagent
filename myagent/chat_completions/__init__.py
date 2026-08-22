@@ -1,13 +1,12 @@
 """Old version for chat completions API"""
 
-from langchain_core.tools import tool
+from langchain_core.tools import tool, BaseTool
 
 from .agent import (
     AnyLanguageModel,
     BaseLanguageModel,
     OpenAIWrapper,
-    agent_step,
-    run_agent,
+    get_lm,
 )
 from .callbacks import Callback, StreamingPrintCallback
 from .messages import (
@@ -18,4 +17,5 @@ from .messages import (
     ToolMessage,
     UserMessage,
     Image, Text,
+    patch_openai_to_allow_visual_tools,
 )

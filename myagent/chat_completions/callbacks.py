@@ -75,6 +75,9 @@ class StreamingPrintCallback(Callback):
     def on_agent_start(self, messages, tools, callbacks, lm, streaming) -> None:
         self._streaming = streaming
         self._step = 0
+        for message in messages:
+            if isinstance(message.content, str):
+                print(f"{message.role.upper()}: {message.content}")
 
     def on_step_start(self, step: int, messages, tools, callbacks, lm, streaming) -> None:
         self._step = step
